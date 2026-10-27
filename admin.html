@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Affiliate Survey Results – TRMA Admin</title>
+<meta name="robots" content="noindex">
+<style>
+  :root{--brand:#1673c9;--brand-dark:#0f4f8c;--ink:#1d2733;--muted:#5b6775;--line:#d9e1ea;--bg:#f3f6f9;--card:#fff;--err:#c0392b}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:1100px;margin:0 auto;padding:20px 16px 60px}
+  header{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  header img{width:64px;height:64px}
+  header h1{font-size:1.35rem;margin:0;flex:1}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px;margin:16px 0}
+  h2{font-size:1.05rem;margin:0 0 12px;color:var(--brand-dark)}
+  input,select{padding:9px;border:1px solid var(--line);border-radius:6px;font:inherit}
+  button{background:var(--brand);color:#fff;border:0;border-radius:6px;padding:9px 16px;font:600 .95rem inherit;cursor:pointer}
+  button.ghost{background:#fff;color:var(--brand);border:1px solid var(--brand)}
+  button.danger{background:#fff;color:var(--err);border:1px solid var(--err);padding:4px 10px;font-size:.85rem}
+  .hidden{display:none}
+  .login{max-width:380px;margin:60px auto}
+  .login input{width:100%;margin-bottom:10px}
+  .err{color:var(--err)}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px}
+  .kpi .v{font-size:1.8rem;font-weight:800;color:var(--brand)}
+  .kpi .l{color:var(--muted);font-size:.85rem}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px}
+  .bar{display:flex;align-items:center;gap:8px;margin:4px 0;font-size:.9rem}
+  .bar .lab{width:150px;flex:none;color:var(--muted)}
+  .bar .track{flex:1;background:#eef3f8;border-radius:4px;height:16px;overflow:hidden}
+  .bar .fill{background:var(--brand);height:100%}
+  .bar .ct{width:56px;text-align:right;flex:none}
+  .qt{font-weight:600;margin:14px 0 6px;font-size:.92rem}
+  .qt:first-child{margin-top:0}
+  table{width:100%;border-collapse:collapse;font-size:.88rem}
+  th,td{text-align:left;padding:8px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:#f7f9fc}
+  .tblwrap{overflow-x:auto}
+  .comments div{padding:8px 0;border-bottom:1px solid var(--line)}
+  .comments .who{color:var(--muted);font-size:.82rem}
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  details summary{cursor:pointer;color:var(--brand)}
+  dl{display:grid;grid-template-columns:minmax(160px,40%) 1fr;gap:4px 12px;margin:8px 0}
+  dt{color:var(--muted)}
+  dd{margin:0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <img src="trma-logo.jpg" alt="TRMA" width="64" height="64">
+    <h1>Business Affiliate Survey – Results</h1>
+    <div id="userBar" class="toolbar hidden"><span id="who" style="color:var(--muted)"></span><button class="ghost" id="logoutBtn">Sign out</button></div>
+  </header>
+
+  <div id="loginView" class="card login">
+    <h2>Admin sign in</h2>
+    <input type="email" id="lemail" placeholder="Email" autocomplete="username">
+    <input type="password" id="lpass" placeholder="Password" autocomplete="current-password">
+    <button id="loginBtn" style="width:100%">Sign in</button>
+    <p id="loginErr" class="err"></p>
+  </div>
+
+  <div id="dataView" class="hidden">
+    <div class="card toolbar">
+      <label>Survey year <select id="yearSel"></select></label>
+      <button id="csvBtn">Download CSV</button>
+      <button class="ghost" id="refreshBtn">Refresh</button>
+    </div>
+    <div class="kpis" id="kpis"></div>
+    <div class="grid">
+      <div class="card"><h2>ROI tier distribution</h2><div id="tiers"></div></div>
+      <div class="card"><h2>Average ratings (1–5)</h2><div id="ratings"></div></div>
+    </div>
+    <div class="card"><h2>Multiple-choice results</h2><div class="grid" id="choices"></div></div>
+    <div class="card"><h2>Written responses</h2><div class="grid" id="texts"></div></div>
+    <div class="card"><h2>All responses</h2><div class="tblwrap"><table id="tbl"></table></div></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script>
+const SUPABASE_URL = "https://hktzvlkrimpfreeoehsi.supabase.co";
+const SUPABASE_KEY = "sb_publishable_IiktW4Ks_6W1T6HqB-EyVA_htFUOyGQ";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+const LABELS = {
+  q1_conference_attendance:["1. Attended a TRMA conference",{both:"Yes, both",one:"Yes, one",none:"No"}],
+  q2_attendee_count:["2. Representatives attending",{"1":"1","2":"2","3":"3","4+":"4 or more",none:"None"}],
+  q3_webinar_frequency:["3. Webinar attendance",{frequent:"Frequently (3+)",occasional:"Occasionally (2)",rare:"Rarely (1)",none:"Not at all"}],
+  q6_sponsored:["6. Sponsored a conference event",{yes:"Yes",no:"No"}],
+  q9_new_voting_member_relationships:["9. New Voting Member relationships",{yes:"Yes",no:"No",unsure:"Unsure"}],
+  q11_decision_maker_access:["11. Access to decision makers",{yes:"Yes",somewhat:"Somewhat",no:"No"}],
+  q12_new_relationships:["12. New relationships initiated",{"0":"0","1-2":"1–2","3-5":"3–5","6+":"6 or more"}],
+  q13_existing_relationships:["13. Existing relationships furthered",{"0":"0","1-2":"1–2","3-5":"3–5","6+":"6 or more"}],
+  q14_new_opportunities:["14. New business opportunities",{yes:"Yes",no:"No",unsure:"Unsure"}],
+  q15_opportunity_value:["15. Value of opportunities",{lt_50k:"< $50K","50k_250k":"$50K–$250K","250k_1m":"$250K–$1M","1m_plus":"$1M+"}],
+  q17_roi_activities:["17. Activities contributing to ROI",{conferences:"Conferences",sponsorships:"Sponsorships",webinars:"Webinars / Panels",committees:"Committees",networking:"Networking Events",other:"Other"}],
+  q19_actionable_insights:["19. Gained actionable insights",{yes:"Yes",somewhat:"Somewhat",no:"No"}],
+  q22_committee_participation:["22. Committee participation",{yes:"Yes",no:"No"}],
+  q26_recommend:["26. Would recommend TRMA",{yes:"Yes",no:"No",maybe:"Maybe"}],
+};
+const RATINGS = {
+  q4_conference_quality:"4. Conference quality",
+  q5_webinar_value:"5. Webinar / panel value",
+  q7_sponsor_satisfaction:"7. Sponsor visibility satisfaction",
+  q8_sponsorship_effectiveness:"8. Sponsorship brand effectiveness",
+  q10_networking_quality:"10. Networking quality",
+  q16_overall_roi:"16. Overall ROI (self-rated)",
+  q18_content_relevance:"18. Content relevance",
+  q23_committee_value:"23. Committee value",
+  q25_overall_satisfaction:"25. Overall satisfaction",
+};
+const TEXTS = {
+  q20_valuable_topics:"20. Most valuable topics / sessions",
+  q21_future_topics:"21. Topics for the future",
+  q24_committee_barriers:"24. Barriers to committee participation",
+  q27_recommendations:"27. Recommendations / feedback",
+  q17_other:"17. ROI activities – Other",
+};
+const COLS = ["id","submitted_at","survey_year","respondent_name","respondent_title","company","email",
+ "q1_conference_attendance","q2_attendee_count","q3_webinar_frequency","q4_conference_quality","q5_webinar_value",
+ "q6_sponsored","q7_sponsor_satisfaction","q8_sponsorship_effectiveness",
+ "q9_new_voting_member_relationships","q10_networking_quality","q11_decision_maker_access","q12_new_relationships","q13_existing_relationships",
+ "q14_new_opportunities","q15_opportunity_value","q16_overall_roi","q17_roi_activities","q17_other",
+ "q18_content_relevance","q19_actionable_insights","q20_valuable_topics","q21_future_topics",
+ "q22_committee_participation","q23_committee_value","q24_committee_barriers",
+ "q25_overall_satisfaction","q26_recommend","q27_recommendations","roi_score","roi_tier"];
+
+let ALL = [], ROWS = [];
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+function bars(counts, total, order){
+  const keys = order || Object.keys(counts);
+  return keys.map(k => {
+    const c = counts[k] || 0, pct = total ? Math.round(c/total*100) : 0;
+    return `<div class="bar"><span class="lab">${esc(k)}</span><span class="track"><span class="fill" style="display:block;width:${pct}%"></span></span><span class="ct">${c} (${pct}%)</span></div>`;
+  }).join("");
+}
+
+function render(){
+  const y = $("yearSel").value;
+  ROWS = y === "all" ? ALL : ALL.filter(r => String(r.survey_year) === y);
+  const n = ROWS.length;
+  const scores = ROWS.map(r => r.roi_score).filter(v => v != null);
+  const avg = a => a.length ? (a.reduce((s,v)=>s+v,0)/a.length) : null;
+  const companies = new Set(ROWS.map(r => (r.company||"").trim().toLowerCase())).size;
+  const rec = ROWS.filter(r => r.q26_recommend === "yes").length;
+  $("kpis").innerHTML = [
+    [n,"Responses"],[companies,"Companies"],
+    [scores.length ? avg(scores).toFixed(1) : "–","Avg ROI score (of 70)"],
+    [n ? Math.round(rec/n*100)+"%" : "–","Would recommend (Yes)"],
+    [n ? avg(ROWS.map(r=>r.q25_overall_satisfaction)).toFixed(2) : "–","Avg overall satisfaction"],
+  ].map(([v,l]) => `<div class="kpi"><div class="v">${v}</div><div class="l">${l}</div></div>`).join("");
+
+  const tc = {}; ROWS.forEach(r => { tc[r.roi_tier] = (tc[r.roi_tier]||0)+1; });
+  $("tiers").innerHTML = bars(tc, n, ["Exceptional","Strong","Moderate","Low"]) +
+    `<p style="color:var(--muted);font-size:.82rem;margin:10px 0 0">&lt;25 Low · 25–40 Moderate · 41–55 Strong · 56+ Exceptional</p>`;
+
+  $("ratings").innerHTML = Object.entries(RATINGS).map(([k,l]) => {
+    const v = ROWS.map(r => r[k]).filter(x => x != null);
+    const a = avg(v);
+    const pct = a ? (a/5*100) : 0;
+    return `<div class="bar"><span class="lab" style="width:210px">${esc(l)}</span><span class="track"><span class="fill" style="display:block;width:${pct}%"></span></span><span class="ct">${a ? a.toFixed(2) : "–"} <small>(n=${v.length})</small></span></div>`;
+  }).join("");
+
+  $("choices").innerHTML = Object.entries(LABELS).map(([k,[title,map]]) => {
+    const counts = {}; let total = 0;
+    ROWS.forEach(r => {
+      const v = r[k];
+      if (Array.isArray(v)) { total++; v.forEach(x => counts[map[x]||x] = (counts[map[x]||x]||0)+1); }
+      else if (v != null) { total++; counts[map[v]||v] = (counts[map[v]||v]||0)+1; }
+    });
+    return `<div><div class="qt">${esc(title)} <small style="color:var(--muted);font-weight:400">(n=${total})</small></div>${bars(counts,total,Object.values(map))}</div>`;
+  }).join("");
+
+  $("texts").innerHTML = Object.entries(TEXTS).map(([k,l]) => {
+    const items = ROWS.filter(r => r[k]).map(r => `<div>${esc(r[k]).replace(/\n/g,"<br>")}<div class="who">— ${esc(r.respondent_name)}, ${esc(r.company)}</div></div>`);
+    return `<div class="comments"><div class="qt">${esc(l)} (${items.length})</div>${items.join("") || '<div style="color:var(--muted)">No responses</div>'}</div>`;
+  }).join("");
+
+  $("tbl").innerHTML = `<tr><th>Date</th><th>Name</th><th>Company</th><th>ROI</th><th>Tier</th><th>Details</th><th></th></tr>` +
+    ROWS.map(r => `<tr>
+      <td>${new Date(r.submitted_at).toLocaleDateString()}</td>
+      <td>${esc(r.respondent_name)}<br><small>${esc(r.respondent_title)}</small><br><small>${esc(r.email)}</small></td>
+      <td>${esc(r.company)}</td><td><strong>${r.roi_score ?? "–"}</strong></td><td>${esc(r.roi_tier)}</td>
+      <td><details><summary>View</summary><dl>${COLS.slice(7).map(c => `<dt>${esc(c)}</dt><dd>${esc(Array.isArray(r[c]) ? r[c].join(", ") : r[c])}</dd>`).join("")}</dl></details></td>
+      <td><button class="danger" data-del="${r.id}">Delete</button></td></tr>`).join("");
+}
+
+async function load(){
+  const { data, error } = await sb.rpc("affiliate_survey_results");
+  if (error) { alert("Could not load results: " + error.message); return; }
+  ALL = data || [];
+  const years = [...new Set(ALL.map(r => r.survey_year))].sort((a,b)=>b-a);
+  const cur = $("yearSel").value;
+  $("yearSel").innerHTML = years.map(y => `<option>${y}</option>`).join("") + `<option value="all">All years</option>`;
+  if (cur && [...$("yearSel").options].some(o => o.value === cur)) $("yearSel").value = cur;
+  render();
+}
+
+function csv(){
+  const q = v => { v = Array.isArray(v) ? v.join("; ") : (v ?? ""); v = String(v); return /[",\n\r]/.test(v) ? `"${v.replace(/"/g,'""')}"` : v; };
+  const lines = [COLS.join(",")].concat(ROWS.map(r => COLS.map(c => q(r[c])).join(",")));
+  const blob = new Blob(["﻿" + lines.join("\r\n")], {type:"text/csv"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `trma-affiliate-survey-${$("yearSel").value}.csv`;
+  a.click();
+}
+
+async function showData(session){
+  const { data: isAdmin } = await sb.rpc("affiliate_survey_is_admin");
+  if (!isAdmin) { $("loginErr").textContent = "This account does not have access to survey results."; await sb.auth.signOut(); return; }
+  $("who").textContent = session.user.email;
+  $("loginView").classList.add("hidden");
+  $("userBar").classList.remove("hidden");
+  $("dataView").classList.remove("hidden");
+  load();
+}
+
+$("loginBtn").onclick = async () => {
+  $("loginErr").textContent = "";
+  const { data, error } = await sb.auth.signInWithPassword({ email: $("lemail").value.trim(), password: $("lpass").value });
+  if (error) { $("loginErr").textContent = error.message; return; }
+  showData(data.session);
+};
+$("lpass").addEventListener("keydown", e => { if (e.key === "Enter") $("loginBtn").click(); });
+$("logoutBtn").onclick = async () => { await sb.auth.signOut(); location.reload(); };
+$("refreshBtn").onclick = load;
+$("csvBtn").onclick = csv;
+$("yearSel").onchange = render;
+$("tbl").addEventListener("click", async e => {
+  const id = e.target.dataset.del;
+  if (!id) return;
+  const r = ALL.find(x => String(x.id) === id);
+  if (!confirm(`Delete the response from ${r.respondent_name} (${r.company})? This cannot be undone.`)) return;
+  const { error } = await sb.rpc("affiliate_survey_delete", { p_id: Number(id) });
+  if (error) { alert(error.message); return; }
+  load();
+});
+
+sb.auth.getSession().then(({ data }) => { if (data.session) showData(data.session); });
+</script>
+</body>
+</html>
